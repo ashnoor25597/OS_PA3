@@ -1,0 +1,42 @@
+Programming Assignment: Processes, Threads, and Synchronization
+Name: Ashnoor Wadhera, Vayom Garg
+Roll number: 2025597, 2025536
+
+A-Q1. Why should execvp() normally be called in the child rather than the shell process?
+The child can be replaced by the requested program while the parent shell remains alive to display the next prompt and run later commands. If the shell called execvp(), the shell itself would be replaced.
+
+A-Q2. Why must cd be implemented by the shell process itself rather than by a forked child?
+A child inherits its own copy of the working-directory state. Calling chdir() in that child does not change the parent's directory, so later commands in the shell would still run from the old directory.
+
+A-Q3. What problem can arise if the parent never waits for terminated child processes?
+Terminated children may remain as zombies because the parent has not collected their exit status. Over time, zombies consume process-table entries.
+
+B-Q1. Conceptually decompose total_jobs++ into load, modify, and store steps. Why is it not one indivisible operation?
+The thread loads total_jobs from memory, adds one to its local value, then stores the result. These are separate steps and another thread can interleave its own update between them.
+
+B-Q2. Give a two-thread interleaving that loses one increment.
+If total_jobs is 0, thread A loads 0 and thread B loads 0. A adds one and stores 1; B adds one to its old value and stores 1. The final value is 1 rather than 2.
+
+B-Q3. Why can an unsafe run occasionally print the expected value even though the program has a race?
+The timing may happen to avoid overlapping updates, so no increment is lost in that run. A correct-looking result does not remove the data race or guarantee future runs will be correct.
+
+C-Q1. Why must head, tail, and count be protected by the same queue mutex?
+They jointly describe the queue's state. Protecting them with one mutex makes each insertion or removal an indivisible state transition and prevents threads from observing inconsistent indices and counts.
+
+C-Q2. Why must releasing the mutex and sleeping in pthread_cond_wait() behave atomically?
+It prevents a notification from being lost between checking the predicate and going to sleep. The wait atomically releases the mutex and blocks, then reacquires the mutex before returning.
+
+C-Q3. Why must the condition around pthread_cond_wait() be checked with while rather than if?
+A thread can wake spuriously, or another thread can change the queue before the awakened thread reacquires the mutex. The while loop rechecks the predicate and waits again if progress is still impossible.
+
+C-Q4. Why is pthread_cond_broadcast() appropriate during queue shutdown?
+Every sleeping consumer must be given a chance to wake, observe shutdown, and exit once the queue is empty. A single signal may wake only one consumer and leave the others asleep indefinitely.
+
+C-Q5. Why is a condition variable preferable to busy waiting when the queue is empty for a long time?
+A waiting consumer sleeps without repeatedly using CPU time to check the queue. It wakes when signalled about a relevant state change.
+
+C-Q6. Why can per-worker jobs_completed counters reduce synchronization overhead compared with one shared global counter?
+Each worker updates only its own counter, so workers do not need to contend on a mutex or cache line for every completed job. The main thread sums the counters after joining all workers.
+
+BONUS-Q. If you attempt the bonus, explain why queue_shutdown() must occur only after ALL producer threads have terminated.
+If a shutdown occurs while a producer is still submitting, queue_push() will reject its later jobs, so some requested jobs may never be accepted. The main thread must join all producers first, then shut down the queue, and finally join the consumers after they drain all accepted jobs.
